@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>DeepMatch - 意图驱动匹配</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        /* --- DeepSeek 风格变量 --- */
+        :root {
+            --ds-blue: #4d6bfe;
+            --ds-blue-hover: #3b5bdb;
+            --bg-body: #f9fafe;
+            --bg-card: #ffffff;
+            --text-main: #1f2329;
+            --text-secondary: #86909c;
+            --border-light: #e5e6eb;
+            --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+            --radius-lg: 16px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background-color: var(--bg-body);
+            color: var(--text-main);
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        #app {
+            width: 100%;
+            max-width: 600px;
+            height: 100%;
+            background-color: var(--bg-card);
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            box-shadow: var(--shadow-md);
+        }
+
+        .page {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            display: none;
+            flex-direction: column;
+            background: var(--bg-card);
+            z-index: 10;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .page.active {
+            display: flex;
+            opacity: 1;
+        }
+
+        /* --- 1. 首页 (Home) --- */
+        .home-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 30px;
+        }
+
+        .brand-area {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .logo-text {
+            font-size: 2rem;
+            font-weight: 600;
+            color: var(--text-main);
+            letter-spacing: -0.5px;
+        }
+        
+        .logo-sub {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+            margin-top: 5px;
+        }
+
+        /* 模仿 AI 输入框 */
+        .prompt-box-wrapper {
+            width: 100%;
+            background: #fff;
+            border: 1px solid var(--border-light);
+            border-radius: var(--radius-lg);
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            padding: 15px;
+            transition: all 0.2s;
+            position: relative;
+        }
+
+        .prompt-box-wrapper:focus-within {
+            border-color: var(--ds-blue);
+            box-shadow: 0 0 0 3px rgba(77, 107, 254, 0.15);
+        }
+
+        .prompt-textarea {
+            width: 100%;
+            border: none;
+            outline: none;
+            resize: none;
+            font-size: 1rem;
+            line-height: 1.5;
+            min-height: 100px;
+            color: var(--text-main);
+            background: transparent;
+        }
+
+        .prompt-textarea::placeholder {
+            color: #bdc1c9;
+        }
+
+        .prompt-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 10px;
+        }
+
+        .model-tag {
+            font-size: 0.75rem;
+            color: var(--ds-blue);
+            background: rgba(77, 107, 254, 0.1);
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-weight: 500;
+        }
+
+        .btn-submit {
+            background-color: var(--ds-blue);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        
+        .btn-submit:hover { background-color: var(--ds-blue-hover); }
+        .btn-submit:disabled { background-color: #e5e6eb; cursor: not-allowed; }
+
+        .suggestion-area {
+            margin-top: 30px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+        }
+
+        .suggestion-chip {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            background: #f7f8fa;
+            padding: 8px 16px;
+            border-radius: 20px;
+            cursor: pointer;
+            border: 1px solid transparent;
+            transition: all 0.2s;
+        }
+
+        .suggestion-chip:hover {
+            background: #fff;
+            border-color: var(--border-light);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+
+        /* --- 2. 思考/匹配页 (Reasoning) --- */
+        .reasoning-container {
+            flex: 1;
+            padding: 40px 25px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .reasoning-status {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .spinner {
+            width: 20px; height: 20px;
+            border: 2px solid rgba(77, 107, 254, 0.3);
+            border-top-color: var(--ds-blue);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* 思维链日志窗口 */
+        .thought-chain {
+            background: #f7f8fa;
+            border-radius: 12px;
+            padding: 20px;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.85rem;
+            color: #555;
+            line-height: 1.6;
+            flex: 1;
+            overflow-y: auto;
+            border-left: 3px solid var(--ds-blue);
+        }
+
+        .log-item {
+            margin-bottom: 8px;
+            opacity: 0;
+            animation: fadeIn 0.3s forwards;
+        }
+        
+        .highlight { color: var(--ds-blue); font-weight: bold; }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* --- 3. 聊天页 (Chat) --- */
+        /* 复用之前的聊天样式，稍作微调 */
+        .chat-header {
+            height: 60px;
+            border-bottom: 1px solid var(--border-light);
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 0 15px; background: #fff;
+        }
+        .chat-body { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 15px; }
+        .msg { max-width: 80%; padding: 12px 16px; border-radius: 12px; font-size: 0.95rem; line-height: 1.5; }
+        .msg.me { align-self: flex-end; background: var(--ds-blue); color: white; border-bottom-right-radius: 2px; }
+        .msg.other { align-self: flex-start; background: #f2f3f5; color: var(--text-main); border-bottom-left-radius: 2px; }
+        .input-bar { padding: 15px; background: #fff; display: flex; gap: 10px; border-top: 1px solid var(--border-light); }
+        .chat-input { flex: 1; background: #f7f8fa; border: none; padding: 12px; border-radius: 20px; outline: none; }
+        
+    </style>
+</head>
+<body>
+
+    <div id="app">
+        <!-- 1. 首页：自然语言输入 -->
+        <div id="page-home" class="page active">
+            <div class="home-container">
+                <div class="brand-area">
+                    <div class="logo-text">DeepMatch</div>
+                    <div class="logo-sub">描述你的需求，AI 将为你匹配最佳玩伴</div>
+                </div>
+
+                <div class="prompt-box-wrapper">
+                    <textarea id="userInput" class="prompt-textarea" placeholder="在此输入... &#10;例如：找个今晚一起打瓦罗兰特排位的，我是白银段位，主玩烟位。"></textarea>
+                    <div class="prompt-footer">
+                        <span class="model-tag">DeepMatch-R1</span>
+                        <button class="btn-submit" onclick="startDeepAnalysis()" id="submitBtn">
+                            <i class="fas fa-arrow-up"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="suggestion-area">
+                    <div class="suggestion-chip" onclick="fillInput('我想找人一起玩《黑神话：悟空》，交流隐藏Boss打法')">🐵 黑神话攻略交流</div>
+                    <div class="suggestion-chip" onclick="fillInput('瓦罗兰特国服双排，白金段位，心态好不压力')">🔫 瓦罗兰特上分</div>
+                    <div class="suggestion-chip" onclick="fillInput('找个搭子一起玩《双人成行》，我是PC版')">👫 双人成行</div>
+                    <div class="suggestion-chip" onclick="fillInput('刚入坑《艾尔登法环》，求大佬带带路')">💍 法环萌新</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 2. 思考页：思维链展示 -->
+        <div id="page-matching" class="page">
+            <div class="reasoning-container">
+                <div class="reasoning-status">
+                    <div class="spinner"></div>
+                    <span>DeepMatch 正在思考...</span>
+                </div>
+                <!-- 这里的日志将动态生成 -->
+                <div class="thought-chain" id="thoughtLog"></div>
+            </div>
+            <div style="padding: 20px; text-align: center;">
+                <button onclick="cancelMatch()" style="background:none; border:none; color:#888; cursor:pointer;">取消</button>
+            </div>
+        </div>
+
+        <!-- 3. 聊天页 -->
+        <div id="page-chat" class="page">
+            <header class="chat-header">
+                <i class="fas fa-chevron-left" onclick="location.reload()" style="cursor:pointer; color:#555;"></i>
+                <div style="text-align: center;">
+                    <div style="font-weight: 600;" id="partnerName">User</div>
+                    <div style="font-size: 0.75rem; color: var(--ds-blue);" id="matchReason">匹配度 98%</div>
+                </div>
+                <i class="fas fa-ellipsis-h" style="color:#555;"></i>
+            </header>
+            <div class="chat-body" id="chatBody"></div>
+            <div class="input-bar">
+                <input type="text" class="chat-input" id="chatInput" placeholder="发送消息...">
+                <button onclick="sendMsg()" style="background:var(--ds-blue); color:white; border:none; width:36px; height:36px; border-radius:50%; cursor:pointer;"><i class="fas fa-paper-plane"></i></button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        /* --- 模拟数据库 --- */
+        // 系统会根据关键词在这些用户中查找
+        const mockDatabase = [
+            { 
+                id: "Agent_Viper", 
+                keywords: ["瓦罗兰特", "valorant", "FPS", "排位", "白银", "黄金", "烟位"],
+                intro: "我主玩幽影和蝰蛇，目前黄金2，每晚8点在线，不压力。",
+                reply: "嗨！看到你也玩瓦，我也在找排位搭子，你通常几点在？"
+            },
+            { 
+                id: "MonkeyKing", 
+                keywords: ["黑神话", "悟空", "wukong", "剧情", "boss"],
+                intro: "全成就达成，正在研究二周目细节，欢迎讨论剧情。",
+                reply: "天命人你好！你玩到第几章了？那个隐藏Boss确实难打。"
+            },
+            { 
+                id: "Tarnished_One", 
+                keywords: ["艾尔登法环", "法环", "老头环", "萌新", "带人"],
+                intro: "几百小时老ass了，喜欢带萌新开荒，PC端。",
+                reply: "褪色者你好，我可以带你跑图，只要你不介意被入侵哈哈。"
+            },
+            { 
+                id: "ItTakesTwo", 
+                keywords: ["双人成行", "合作", "休闲", "steam"],
+                intro: "买了游戏一直没找到人玩，希望能找个有耐心的队友。",
+                reply: "哇终于找到人了，我买了很久一直吃灰，我们要不用Discord语音？"
+            },
+            {
+                id: "Tech_Guru",
+                keywords: ["显卡", "装机", "硬件", "配置"],
+                intro: "资深垃圾佬，喜欢研究配置单。",
+                reply: "4090确实贵，我觉得如果是为了玩黑神话，4070Ti Super性价比更高。"
+            }
+        ];
+
+        /* --- 逻辑部分 --- */
+
+        function fillInput(text) {
+            document.getElementById('userInput').value = text;
+        }
+
+        function showPage(pageId) {
+            document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+            document.getElementById(pageId).classList.add('active');
+        }
+
+        // 核心：开始深度分析
+        function startDeepAnalysis() {
+            const input = document.getElementById('userInput').value.trim();
+            if (!input) {
+                alert("请输入一些内容，例如游戏名或玩法需求。");
+                return;
+            }
+
+            showPage('page-matching');
+            const logContainer = document.getElementById('thoughtLog');
+            logContainer.innerHTML = ''; // 清空日志
+
+            // 1. 启动思维链模拟
+            runThinkingProcess(input);
+        }
+
+        async function runThinkingProcess(input) {
+            // 定义思考步骤（模拟 DeepSeek R1 的输出风格）
+            const steps = [
+                `> 接收用户输入: "${input.substring(0, 15)}..."`,
+                `> 正在进行语义分词与意图识别...`, 
+                // 动态插入提取的关键词
+                (cb) => {
+                    const keywords = extractKeywords(input);
+                    cb(`> 提取关键实体: [${keywords.join(', ')}]`);
+                    return keywords;
+                },
+                `> 正在检索向量数据库 (Vector DB)...`,
+                `> 计算余弦相似度...`,
+                (cb, prevData) => {
+                    const bestMatch = findBestMatch(prevData); // 使用提取的关键词去匹配
+                    cb(`> 锁定最佳匹配对象 ID: ${bestMatch.user.id} (置信度: 0.9${Math.floor(Math.random()*9)})`);
+                    return bestMatch;
+                },
+                `> 正在建立加密通道...`
+            ];
+
+            let contextData = null; // 用于在步骤间传递数据
+
+            for (let step of steps) {
+                await new Promise(r => setTimeout(r, 800 + Math.random() * 500)); // 随机延迟
+                
+                let logText = "";
+                if (typeof step === 'function') {
+                    // 如果是函数，执行逻辑并获取返回值
+                    contextData = step((text) => { logText = text; }, contextData);
+                } else {
+                    logText = step;
+                }
+
+                addLog(logText);
+            }
+
+            // 思考结束，进入聊天
+            setTimeout(() => {
+                enterChat(contextData);
+            }, 1000);
+        }
+
+        // 简单的关键词提取逻辑
+        function extractKeywords(text) {
+            // 这里只是简单的正则匹配，实际项目中会用 NLP
+            const potentialKeywords = ["瓦罗兰特", "valorant", "黑神话", "悟空", "法环", "艾尔登", "双人成行", "排位", "休闲", "白银", "黄金", "FPS", "Steam", "装机", "硬件"];
+            const found = potentialKeywords.filter(k => text.toLowerCase().includes(k.toLowerCase()));
+            
+            if (found.length === 0) return ["通用匹配", "游戏"]; // 兜底
+            return found;
+        }
+
+        // 数据库匹配逻辑
+        function findBestMatch(keywords) {
+            let bestUser = mockDatabase[0];
+            let maxScore = -1;
+
+            mockDatabase.forEach(user => {
+                let score = 0;
+                keywords.forEach(k => {
+                    // 如果用户的关键词列表或简介包含搜索词
+                    if (user.keywords.some(uk => uk.toLowerCase().includes(k.toLowerCase())) || 
+                        user.intro.includes(k)) {
+                        score++;
+                    }
+                });
+                
+                if (score > maxScore) {
+                    maxScore = score;
+                    bestUser = user;
+                }
+            });
+
+            // 如果完全没匹配到（分数0），随机返回一个，避免尴尬
+            if (maxScore === 0) {
+                 bestUser = mockDatabase[Math.floor(Math.random() * mockDatabase.length)];
+            }
+
+            return { user: bestUser, score: maxScore };
+        }
+
+        function addLog(text) {
+            const div = document.createElement('div');
+            div.className = 'log-item';
+            // 高亮括号内的内容
+            div.innerHTML = text.replace(/\[(.*?)\]/g, '<span class="highlight">[$1]</span>');
+            
+            const container = document.getElementById('thoughtLog');
+            container.appendChild(div);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function cancelMatch() {
+            showPage('page-home');
+        }
+
+        /* --- 聊天逻辑 --- */
+        let currentUser = null;
+
+        function enterChat(matchResult) {
+            currentUser = matchResult.user;
+            showPage('page-chat');
+            
+            document.getElementById('partnerName').innerText = currentUser.id;
+            document.getElementById('matchReason').innerText = `基于关键词: ${currentUser.keywords.slice(0,2).join(', ')}`;
+            
+            const chatBody = document.getElementById('chatBody');
+            chatBody.innerHTML = ''; // 清空旧记录
+            
+            // 系统提示
+            chatBody.innerHTML += `<div style="text-align:center; font-size:0.8rem; color:#ccc; margin-bottom:10px;">DeepMatch 已建立连接</div>`;
+
+            // 模拟对方打招呼
+            setTimeout(() => {
+                receiveMsg(currentUser.reply);
+            }, 1000);
+        }
+
+        function sendMsg() {
+            const input = document.getElementById('chatInput');
+            const text = input.value.trim();
+            if(!text) return;
+
+            // 添加我的消息
+            const chatBody = document.getElementById('chatBody');
+            chatBody.innerHTML += `<div class="msg me">${text}</div>`;
+            input.value = '';
+            chatBody.scrollTop = chatBody.scrollHeight;
+
+            // 模拟回复
+            setTimeout(() => {
+                receiveMsg("这就是缘分！我现在刚好有空，要不要加个好友？");
+            }, 2500);
+        }
+
+        function receiveMsg(text) {
+            const chatBody = document.getElementById('chatBody');
+            chatBody.innerHTML += `<div class="msg other">${text}</div>`;
+            chatBody.scrollTop = chatBody.scrollHeight;
+        }
+
+        // 回车发送监听
+        document.getElementById('chatInput').addEventListener('keypress', function (e) {
+            if (e.key === 'Enter') sendMsg();
+        });
+    </script>
+</body>
+</html>
